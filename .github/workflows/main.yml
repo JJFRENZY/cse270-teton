@@ -45,23 +45,59 @@ jobs:
             echo "No pytest tests found; continuing."
           fi
 
-      - name: Prepare site artifact
+      - name: Prepare site artifact (auto-detect site folder)
+        shell: bash
         run: |
           set -euo pipefail
+
+          # Candidate folders we know about (include paths with spaces)
+          CANDIDATES=(
+            "teton/1.6" "teton/1.5" "teton/1.4" "teton/1.3" "teton/1.2" "teton"
+            "cse270 5/teton/1.6" "cse270 5/teton"
+            "cse270 4/teton/1.6" "cse270 4/teton"
+            "cse270 3/teton/1.6" "cse270 3/teton"
+          )
+
           SITE=""
-          for CAND in "teton/1.6" "teton/1.5" "teton/1.4" "teton/1.3" "teton/1.2" "teton"; do
-            if [ -d "$CAND" ]; then
-              SITE="$CAND"
+
+          for C in "${CANDIDATES[@]}"; do
+            if [ -d "$C" ]; then
+              SITE="$C"
+              echo "Found candidate site folder: $SITE"
               break
             fi
           done
+
+          # If still not found, try to auto-detect the nearest folder that has an index.html
           if [ -z "$SITE" ]; then
-            echo "No site folder found (looked for teton/{1.6..1.2} and teton)." >&2
+            echo "Attempting auto-detect of site folder by locating an index.html..."
+            # Prefer teton paths if present
+            IDX="$(git ls-files -z | tr '\0' '\n' | grep -E '^.*teton/.*/index\.html$' | head -n 1 || true)"
+            if [ -z "$IDX" ]; then
+              IDX="$(git ls-files -z | tr '\0' '\n' | grep -E '/index\.html$' | head -n 1 || true)"
+            fi
+            if [ -n "$IDX" ]; then
+              SITE="$(dirname "$IDX")"
+              echo "Auto-detected site folder: $SITE"
+            fi
+          fi
+
+          if [ -z "$SITE" ]; then
+            echo "No site folder found (checked candidates and auto-detect)." >&2
+            echo "Tip: ensure your built static site has an index.html (e.g., teton/1.6/index.html)." >&2
             exit 1
           fi
+
           echo "Using site path: $SITE"
           mkdir -p site
           cp -a "$SITE"/. site/
+          # Basic sanity check
+          if [ ! -f site/index.html ] && [ ! -f site/index.htm ]; then
+            echo "Warning: No index.html in site/. GitHub Pages may render a listing or 404." >&2
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
