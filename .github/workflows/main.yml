@@ -1,75 +1,132 @@
+# Simple workflow for deploying static content to GitHub Pages
 name: Simple CI/CD Pipeline for CSE 270
 
 on:
+  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout the latest code
+        uses: actions/checkout@v4.1.2
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5.0.0
         with:
           python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest pytest-mock
+          pip install flake8 pytest requests pytest-mock selenium requests-mock coverage
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Make lint non-blocking but keep the warnings summary line
-      - name: Lint with flake8 (non-blocking)
+      - name: Lint with flake8
         run: |
-          set +e
+          # stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          FLK_STRICT=$?
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-          exit 0
+
+      - name: Startup HTTP Server for pipeline tests
+        uses: Eun/http-server-action@v1.0.11
+        with:
+          directory: .
+          port: 5500
+          index-files: |
+            ["index.html", "index.htm"]
 
       - name: Run tests
         run: |
-          pytest -q || true  # keep non-blocking if no tests present
+          pytest
+
+      # NEW: Prepare a site/ artifact from the actual folder that exists
+      - name: Prepare site artifact
+        run: |
+          set -e
+          for CAND in "teton/1.6" "teton/1.5" "teton/1.4" "teton/1.3" "teton/1.2" "teton"; do
+            if [ -d "$CAND" ]; then
+              echo "Using site folder: $CAND"
+              mkdir -p site
+              cp -a "$CAND"/. site/
+              # sanity check for index
+              if [ ! -f site/index.html ] && [ ! -f site/index.htm ]; then
+                echo "Warning: No index.html found in $CAND"
+              fi
+              exit 0
+            fi
+          done
+          echo "No site folder found (looked for teton/{1.6..1.2} and teton)." >&2
+          exit 1
 
       - name: Upload static site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: teton/1.6
+          path: site
+
+  analyze:
+    needs: build
+    name: Analyze
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']
+        # CodeQL supports ['cpp','csharp','go','java','javascript','python','ruby','swift']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
 
   deploy:
-    name: Deploy to GitHub Pages
-    needs: build-and-test
-    runs-on: ubuntu-latest
+    needs: analyze
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
       - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Deploy
+        uses: actions/configure-pages@v4.0.0
+
+      - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v4.0.5
+
 
