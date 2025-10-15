@@ -1,0 +1,81 @@
+{
+  "id": "cse270-teton-smoketest",
+  "version": "2.0",
+  "name": "Smoke Test",
+  "url": "http://127.0.0.1:5500/teton/1.6/",
+  "tests": [
+    {
+      "id": "home-title-logo",
+      "name": "Home Page Elements",
+      "commands": [
+        { "command": "open", "target": "/", "value": "" },
+        { "command": "assertTitle", "target": "Teton Idaho CoC", "value": "" },
+        { "command": "assertText", "target": "css=h1", "value": "Teton Idaho Chamber of Commerce" },
+        { "command": "assertElementPresent", "target": "css=img[alt*='logo' i]", "value": "" }
+      ]
+    },
+    {
+      "id": "join-link",
+      "name": "Join Us Link",
+      "commands": [
+        { "command": "open", "target": "/", "value": "" },
+        { "command": "assertElementPresent", "target": "linkText=Join Us", "value": "" },
+        { "command": "click", "target": "linkText=Join Us", "value": "" },
+        { "command": "assertUrl", "target": "*/join*", "value": "" }
+      ]
+    },
+    {
+      "id": "directory-grid-list",
+      "name": "Directory Grid/List Views",
+      "commands": [
+        { "command": "open", "target": "/directory.html", "value": "" },
+        { "command": "click", "target": "css=button#grid", "value": "" },
+        { "command": "assertText", "target": "xpath=//*[contains(.,'Teton Turf and Tree')]", "value": "Teton Turf and Tree" },
+        { "command": "click", "target": "css=button#list", "value": "" },
+        { "command": "assertText", "target": "xpath=//*[contains(.,'Teton Turf and Tree')]", "value": "Teton Turf and Tree" }
+      ]
+    },
+    {
+      "id": "join-form",
+      "name": "Join Page Form",
+      "commands": [
+        { "command": "open", "target": "/join.html", "value": "" },
+        { "command": "assertElementPresent", "target": "css=input[name='firstName']", "value": "" },
+        { "command": "type", "target": "css=input[name='firstName']", "value": "Alex" },
+        { "command": "click", "target": "css=button.next", "value": "" },
+        { "command": "assertElementPresent", "target": "css=input[type='email']", "value": "" }
+      ]
+    },
+    {
+      "id": "admin-login",
+      "name": "Admin Login Error",
+      "commands": [
+        { "command": "open", "target": "/admin.html", "value": "" },
+        { "command": "assertElementPresent", "target": "css=input[name='username']", "value": "" },
+        { "command": "type", "target": "css=input[name='username']", "value": "wronguser" },
+        { "command": "type", "target": "css=input[name='password']", "value": "wrongpass" },
+        { "command": "click", "target": "css=button[type='submit']", "value": "" },
+        { "command": "assertTextPresent", "target": "Invalid", "value": "" }
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "smoke-suite",
+      "name": "Smoke Suite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300,
+      "tests": [
+        "home-title-logo",
+        "join-link",
+        "directory-grid-list",
+        "join-form",
+        "admin-login"
+      ]
+    }
+  ],
+  "urls": [
+    "http://127.0.0.1:5500/teton/1.6/"
+  ]
+}
